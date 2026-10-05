@@ -1,0 +1,10 @@
+{
+  "name": "digistock-whatsapp-sidecar",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Service WhatsApp local de DigiStock (whatsapp-web.js). Communication via stdin/stdout uniquement.",
+  "main": "src/index.js",
+  "dependencies": {
+    "whatsapp-web.js": "^1.26.0"
+  }
+}
