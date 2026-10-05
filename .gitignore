@@ -1,0 +1,15 @@
+node_modules
+dist
+*.local
+.DS_Store
+src-tauri/target
+src-tauri/gen/schemas
+src-tauri/binaries/*.exe
+src-tauri/resources/whatsapp/*.cjs
+src-tauri/resources/whatsapp/*.map
+sidecar/whatsapp/node_modules
+ACTIVATION_CODES*.txt
+*.log
+coverage
+.clauderelease/
+*.tsbuildinfo
