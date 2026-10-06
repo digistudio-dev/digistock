@@ -1,7 +1,7 @@
 {
   "name": "digistock",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "DigiStock — gestion de stock, ventes, achats et clients. Par DigiStudio.",
   "author": "DigiStudio",
   "type": "module",
@@ -16,7 +16,8 @@
     "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
     "sidecar:build": "node scripts/build-sidecar.mjs",
     "premium:hash": "node scripts/premium-hash.mjs",
-    "icons": "tauri icon src-tauri/icons/app-icon.png"
+    "icons": "tauri icon src-tauri/icons/app-icon.png",
+    "release:prepare": "node scripts/make-release.mjs"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.1.0",
@@ -36,6 +37,8 @@
     "@tauri-apps/plugin-dialog": "^2.0.1",
     "@tauri-apps/plugin-log": "^2.0.1",
     "@tauri-apps/plugin-opener": "^2.2.0",
+    "@tauri-apps/plugin-process": "^2.4.0",
+    "@tauri-apps/plugin-updater": "^2.13.1",
     "@tauri-apps/plugin-window-state": "^2.0.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

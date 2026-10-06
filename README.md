@@ -47,6 +47,27 @@ L'installateur est généré dans `src-tauri/target/release/bundle/nsis/DigiStoc
 
 L'installateur NSIS (français) installe DigiStock, crée les raccourcis et télécharge WebView2 si nécessaire. Le service WhatsApp utilise Microsoft Edge, déjà présent sur Windows 10/11.
 
+## Publier une nouvelle version (mise à jour automatique)
+
+Depuis la 1.0.1, DigiStock vérifie au démarrage s'il existe une version plus récente sur GitHub Releases (`digistudio-dev/digistock`) et propose de l'installer (Paramètres › À propos › Mises à jour). Les mises à jour sont **signées** : l'application refuse tout paquet qui n'est pas signé par votre clé.
+
+1. Augmentez la version dans `package.json`, `src-tauri/Cargo.toml` et `src-tauri/tauri.conf.json`.
+2. Construisez avec la clé privée de signature (à conserver précieusement, hors du dépôt) :
+
+```bash
+TAURI_SIGNING_PRIVATE_KEY="C:/Users/PROBOOK/.tauri/digistock-updater.key" TAURI_SIGNING_PRIVATE_KEY_PASSWORD="" npm run tauri build
+```
+
+3. Préparez les fichiers de publication :
+
+```bash
+npm run release:prepare -- "Correction de la connexion WhatsApp."
+```
+
+4. Sur GitHub, créez une release nommée exactement `v<version>` (ex. `v1.0.1`) et joignez les 3 fichiers de `release/v<version>/` : l'installateur `.exe`, sa signature `.sig` et `latest.json`.
+
+> Si la clé privée est perdue, plus aucune mise à jour automatique ne pourra être publiée pour les installations existantes : sauvegardez `digistock-updater.key` en lieu sûr.
+
 ## Tests
 
 ```bash

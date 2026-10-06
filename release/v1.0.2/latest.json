@@ -1,0 +1,11 @@
+{
+  "version": "1.0.2",
+  "notes": "WhatsApp : nouvelle méthode officielle par défaut (DigiStock ouvre WhatsApp avec le message prêt, sans QR code ni risque pour votre compte). La connexion QR devient une option expérimentale avec avertissement. Corrige aussi le blocage « The browser is already running ».",
+  "pub_date": "2026-10-06T09:56:01.095Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSK2YxN3lPd1h5cXIzT25iVll1eVhLYnJlMGhZVWxzK3YvNStqcjNLSlIvcWhyTWhFblpua3BRaDNHbHZyUElnWUlWa0txS2VTUlNKeFNPSFJIZ2JFRE1lanpVbCtOeHdNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxMjgwNTI5CWZpbGU6RGlnaVN0b2NrXzEuMC4yX3g2NC1zZXR1cC5leGUJdmVyc2lvbjoxLjAuMgptVnFoSVMvVHpRclhtdjMyVXIrQVI5K3FEbjAzaEY3Sy9CdytqUitxd1VBOFBCSGlPeXVzWmhPVnlMMjFIcG01R25OTm4rZE44NXR4S3BOUE94Z21EZz09Cg==",
+      "url": "https://github.com/digistudio-dev/digistock/releases/download/v1.0.2/DigiStock_1.0.2_x64-setup.exe"
+    }
+  }
+}

@@ -12,6 +12,7 @@ import { LockScreen } from "@/features/auth/lock-screen";
 import { PremiumGateHost } from "@/features/premium/premium-gate";
 import { StockAdjustHost } from "@/features/stock/adjust-dialog";
 import { WhatsAppComposerHost } from "@/features/whatsapp/composer";
+import { useUpdater } from "@/features/updates/updater";
 import { useBarcodeScanner } from "@/hooks/use-barcode";
 import { useShortcuts } from "@/hooks/use-shortcuts";
 import { one } from "@/lib/db";
@@ -68,13 +69,20 @@ export function AppShell() {
         qc.invalidateQueries({ queryKey: ["notifications"] });
       }),
     ];
+    // Recherche silencieuse de mise à jour, quelques secondes après l'ouverture.
+    const upd = setTimeout(async () => {
+      const u = await useUpdater.getState().checkNow();
+      if (u) toast.info(`DigiStock ${u.version} est disponible`, { duration: 15_000, action: { label: "Voir", onClick: () => navigate("/settings/about") } });
+    }, 4000);
     // Analyse quotidienne des expirations.
     call("notifications_scan").catch(() => undefined);
     const id = setInterval(() => call("notifications_scan").catch(() => undefined), 6 * 60 * 60 * 1000);
     return () => {
       subs.forEach((p) => p.then((un) => un()));
       clearInterval(id);
+      clearTimeout(upd);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [qc]);
 
   const fullBleed = location.pathname === "/pos";

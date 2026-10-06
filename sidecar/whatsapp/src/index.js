@@ -33,7 +33,6 @@ const client = new Client({
     executablePath: browser,
     args: ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage", "--no-first-run", "--no-default-browser-check"],
   },
-  takeoverOnConflict: true,
 });
 
 client.on("qr", (qr) => emit({ event: "qr", qr }));
