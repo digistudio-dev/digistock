@@ -1,6 +1,7 @@
 import { Check, ImagePlus, Monitor, Moon, Sun, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
+import { confirm } from "@/components/common/confirm";
 import { NumberInput } from "@/components/common/inputs";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/input";
@@ -360,7 +361,68 @@ export function StockSection() {
 }
 
 // ---------------------------------------------------------------- WhatsApp
+/** Choix de la méthode d'envoi WhatsApp : lien officiel (défaut) ou connexion QR expérimentale. */
+function WhatsAppModeCard() {
+  const mode = useApp((s) => s.settings["whatsapp.mode"]);
+  const saveSettings = useApp((s) => s.saveSettings);
+  const choose = async (next: "link" | "web") => {
+    if (next === mode) return;
+    if (next === "web") {
+      const ok = await confirm({
+        title: "Activer la connexion QR expérimentale ?",
+        description:
+          "Cette méthode automatise WhatsApp Web sans autorisation officielle. WhatsApp peut déconnecter la session, déconnecter votre téléphone ou suspendre le numéro. Utilisez-la uniquement avec un numéro professionnel dédié, à vos risques.",
+        confirmLabel: "Activer quand même",
+        danger: true,
+      });
+      if (ok === false) return;
+    } else {
+      await call("wa_stop").catch(() => undefined);
+    }
+    try {
+      await saveSettings({ "whatsapp.mode": next });
+      toast.success(next === "link" ? "Méthode officielle activée." : "Connexion QR expérimentale activée.");
+    } catch (e) {
+      toast.error(toAppError(e).message);
+    }
+  };
+  const options = [
+    { v: "link" as const, title: "Lien officiel", badge: "Recommandé", desc: "DigiStock ouvre WhatsApp (application ou web) avec le message prêt ; vous appuyez sur Envoyer. Aucun QR code, aucun risque pour votre compte." },
+    { v: "web" as const, title: "Connexion QR", badge: "Expérimental", desc: "Envoi direct depuis DigiStock, PDF joint automatiquement. Méthode non officielle : risque de déconnexion ou de suspension du numéro." },
+  ];
+  return (
+    <SectionCard title="Méthode d'envoi" description="Comment DigiStock envoie vos messages WhatsApp.">
+      <div className="grid gap-3 md:grid-cols-2">
+        {options.map((o) => (
+          <button
+            key={o.v}
+            type="button"
+            onClick={() => choose(o.v)}
+            className={cn("relative rounded-lg border p-4 text-left transition-colors", mode === o.v ? "border-primary bg-primary-soft/50 ring-2 ring-primary/15" : "hover:border-foreground/25")}
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-[0.875rem] font-semibold">{o.title}</span>
+              <span className={cn("rounded px-1.5 py-0.5 text-[0.625rem] font-bold uppercase tracking-wide", o.v === "link" ? "bg-success-soft text-success" : "bg-warning-soft text-warning")}>{o.badge}</span>
+              {mode === o.v && <Check className="ml-auto size-4 text-primary" />}
+            </div>
+            <p className="mt-1.5 text-[0.75rem] leading-relaxed text-muted-foreground">{o.desc}</p>
+          </button>
+        ))}
+      </div>
+    </SectionCard>
+  );
+}
+
 export function WhatsAppSection() {
+  return (
+    <div className="space-y-4">
+      <WhatsAppModeCard />
+      <WhatsAppTemplates />
+    </div>
+  );
+}
+
+function WhatsAppTemplates() {
   const { draft, set, footer } = useDraft(["whatsapp.template_supplier", "whatsapp.template_reminder", "whatsapp.template_receipt"]);
   const block = (k: "whatsapp.template_supplier" | "whatsapp.template_reminder" | "whatsapp.template_receipt", label: string, vars: string) => (
     <Field label={label} hint={`Variables : ${vars}`}>

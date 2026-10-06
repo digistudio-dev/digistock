@@ -42,6 +42,8 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_window_state::Builder::default().build())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
@@ -118,6 +120,8 @@ pub fn run() {
             commands::wa_status,
             commands::wa_send,
             commands::wa_logout,
+            commands::wa_log_link,
+            commands::document_export,
             commands::wa_stop,
         ])
         .build(tauri::generate_context!())

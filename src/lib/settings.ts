@@ -25,6 +25,8 @@ export const DEFAULT_SETTINGS = {
   "backup.frequency": "daily",
   "backup.keep": 7,
   "backup.last_at": "",
+  /** « link » : lien officiel wa.me (recommandé) ; « web » : connexion QR expérimentale. */
+  "whatsapp.mode": "link",
   "whatsapp.template_supplier":
     "Bonjour {supplier_name},\n\nNous souhaitons commander le produit suivant :\n{product_name}\n\nStock actuel : {current_stock}\nQuantité souhaitée : {recommended_quantity}\n\nPouvez-vous nous confirmer la disponibilité ainsi que le délai de livraison ?\n\nMerci.\n{company_name}",
   "whatsapp.template_reminder":

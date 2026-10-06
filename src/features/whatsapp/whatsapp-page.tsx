@@ -14,7 +14,7 @@ import { select } from "@/lib/db";
 import { dateTime } from "@/lib/format";
 import { formatPhone } from "@/lib/phone";
 import { call, isTauri, toAppError } from "@/lib/tauri";
-import { usePremium } from "@/stores/app";
+import { useApp, usePremium } from "@/stores/app";
 import type { WaStatus } from "@/types";
 
 const KIND_LABEL: Record<string, string> = {
@@ -35,6 +35,44 @@ const STATE: Record<WaStatus["state"], { label: string; tone: "success" | "warni
   error: { label: "Erreur", tone: "danger" },
 };
 
+interface HistoryRow {
+  id: number;
+  recipient_name: string | null;
+  phone: string;
+  message: string;
+  kind: string;
+  status: string;
+  error: string | null;
+  created_at: string;
+  user_name: string | null;
+}
+
+function MessageHistory({ history }: { history: HistoryRow[] }) {
+  return (
+    <Card>
+      <CardHeader title="Messages envoyés" description="Historique des 100 derniers messages." />
+      {history.length === 0 ? (
+        <EmptyState compact icon={<MessageCircle />} title="Aucun message" description="Les messages envoyés depuis DigiStock apparaîtront ici." />
+      ) : (
+        <div className="mt-3 max-h-[560px] divide-y overflow-y-auto border-t">
+          {history.map((m) => (
+            <div key={m.id} className="px-5 py-3 text-[0.8125rem]">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold">{m.recipient_name ?? formatPhone(m.phone)}</span>
+                <Badge>{KIND_LABEL[m.kind] ?? m.kind}</Badge>
+                {m.status === "failed" ? <Badge tone="danger">Échec</Badge> : m.status === "opened" ? <Badge tone="info">Ouvert dans WhatsApp</Badge> : <Badge tone="success">Envoyé</Badge>}
+                <span className="ml-auto text-[0.75rem] text-muted-foreground">{dateTime(m.created_at)}</span>
+              </div>
+              <p className="mt-1 line-clamp-2 whitespace-pre-line text-muted-foreground">{m.message}</p>
+              {m.error && <p className="mt-1 text-[0.75rem] text-danger">{m.error}</p>}
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 export function WhatsAppPage() {
   const premium = usePremium();
   const gate = usePremiumGate();
@@ -43,8 +81,9 @@ export function WhatsAppPage() {
   const [status, setStatus] = useState<WaStatus | null>(null);
   const [qrImg, setQrImg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const linkMode = useApp((s) => s.settings["whatsapp.mode"]) !== "web";
 
-  const { data: initial } = useQuery({ queryKey: ["wa", "status", "page"], queryFn: () => call<WaStatus>("wa_status"), enabled: premium });
+  const { data: initial } = useQuery({ queryKey: ["wa", "status", "page"], queryFn: () => call<WaStatus>("wa_status"), enabled: premium && !linkMode });
   useEffect(() => {
     if (initial) setStatus(initial);
   }, [initial]);
@@ -69,12 +108,20 @@ export function WhatsAppPage() {
     queryKey: ["wa", "history"],
     enabled: premium,
     queryFn: () =>
-      select<{ id: number; recipient_name: string | null; phone: string; message: string; kind: string; status: string; error: string | null; created_at: string; user_name: string | null }>(
+      select<HistoryRow>(
         "SELECT m.*, u.name AS user_name FROM whatsapp_messages m LEFT JOIN users u ON u.id = m.user_id ORDER BY m.id DESC LIMIT 100",
       ),
   });
 
   const connect = async () => {
+    const ok = await confirm({
+      title: "Connexion expérimentale",
+      description:
+        "Cette méthode n'est pas officielle : WhatsApp peut déconnecter la session, déconnecter votre téléphone ou suspendre le numéro. Utilisez de préférence un numéro professionnel dédié. Continuer ?",
+      confirmLabel: "Je comprends, continuer",
+      danger: true,
+    });
+    if (ok === false) return;
     setBusy(true);
     try {
       setStatus(await call<WaStatus>("wa_start"));
@@ -118,7 +165,7 @@ export function WhatsAppPage() {
           <EmptyState
             icon={<MessageCircle />}
             title="WhatsApp est une fonctionnalité Premium"
-            description="Connectez votre WhatsApp une seule fois avec un QR code, puis envoyez vos documents en un clic. Aucun message n'est jamais envoyé sans votre validation."
+            description="Envoyez reçus, factures, relances et commandes fournisseurs : DigiStock ouvre WhatsApp avec le message prêt, vous n'avez plus qu'à appuyer sur Envoyer."
             actions={
               <Button onClick={() => gate.open("whatsapp")}>
                 <Sparkles /> Découvrir Premium
@@ -130,12 +177,51 @@ export function WhatsAppPage() {
     );
   }
 
+  if (linkMode) {
+    return (
+      <Page>
+        <PageHeader title="WhatsApp" description="Méthode officielle : DigiStock ouvre WhatsApp avec le message prêt, vous appuyez sur Envoyer." meta={<Badge tone="success" dot>Prêt</Badge>} />
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[420px_1fr]">
+          <Card className="p-6">
+            <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-full bg-success-soft text-success">
+              <ShieldCheck className="size-7" />
+            </div>
+            <div className="text-center text-[1.0625rem] font-semibold">Aucune connexion nécessaire</div>
+            <p className="mx-auto mt-1 max-w-sm text-center text-[0.8125rem] text-muted-foreground">Aucun QR code à scanner, aucun risque pour votre compte WhatsApp.</p>
+            <ol className="mt-5 space-y-2.5 text-[0.8125rem]">
+              {[
+                "Cliquez sur « WhatsApp » depuis une vente, un client, une facture ou une alerte de stock.",
+                "Vérifiez ou modifiez le message, puis « Ouvrir dans WhatsApp ».",
+                "WhatsApp (application ou web) s'ouvre sur la bonne conversation avec le message prêt.",
+                "Pour un reçu ou une facture, le PDF est enregistré dans Documents › DigiStock : glissez-le dans la conversation.",
+              ].map((t, i) => (
+                <li key={i} className="flex gap-3">
+                  <span className="num flex size-5 shrink-0 items-center justify-center rounded-full bg-primary-soft text-[0.6875rem] font-bold text-primary">{i + 1}</span>
+                  <span>{t}</span>
+                </li>
+              ))}
+            </ol>
+            <div className="mt-6 flex flex-col items-center gap-1">
+              <Button variant="link" className="text-[0.8125rem]" onClick={() => navigate("/settings/whatsapp")}>
+                Modifier les modèles de messages
+              </Button>
+            </div>
+          </Card>
+          <MessageHistory history={history} />
+        </div>
+      </Page>
+    );
+  }
+
   const st: WaStatus["state"] = status?.state && status.state in STATE ? status.state : "disconnected";
   const info = STATE[st] ?? STATE.disconnected;
 
   return (
     <Page>
-      <PageHeader title="WhatsApp" description="Connexion locale et sécurisée : la session reste sur cet ordinateur." meta={<Badge tone={info.tone} dot>{info.label}</Badge>} />
+      <PageHeader title="WhatsApp" description="Connexion QR expérimentale : la session reste sur cet ordinateur." meta={<Badge tone={info.tone} dot>{info.label}</Badge>} />
+      <div className="mb-4 rounded-lg border border-warning/30 bg-warning-soft px-4 py-3 text-[0.8125rem]">
+        <span className="font-semibold">Méthode non officielle.</span> WhatsApp peut déconnecter la session ou votre téléphone, voire suspendre le numéro. La méthode officielle (lien) est recommandée : Paramètres › WhatsApp.
+      </div>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[420px_1fr]">
         <Card className="p-6">
           {st === "connected" ? (
@@ -190,27 +276,7 @@ export function WhatsAppPage() {
             Modifier les modèles de messages
           </Button>
         </Card>
-        <Card>
-          <CardHeader title="Messages envoyés" description="Historique des 100 derniers messages." />
-          {history.length === 0 ? (
-            <EmptyState compact icon={<MessageCircle />} title="Aucun message" description="Les messages envoyés depuis DigiStock apparaîtront ici." />
-          ) : (
-            <div className="mt-3 max-h-[560px] divide-y overflow-y-auto border-t">
-              {history.map((m) => (
-                <div key={m.id} className="px-5 py-3 text-[0.8125rem]">
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold">{m.recipient_name ?? formatPhone(m.phone)}</span>
-                    <Badge>{KIND_LABEL[m.kind] ?? m.kind}</Badge>
-                    {m.status === "failed" ? <Badge tone="danger">Échec</Badge> : <Badge tone="success">Envoyé</Badge>}
-                    <span className="ml-auto text-[0.75rem] text-muted-foreground">{dateTime(m.created_at)}</span>
-                  </div>
-                  <p className="mt-1 line-clamp-2 whitespace-pre-line text-muted-foreground">{m.message}</p>
-                  {m.error && <p className="mt-1 text-[0.75rem] text-danger">{m.error}</p>}
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
+        <MessageHistory history={history} />
       </div>
     </Page>
   );
