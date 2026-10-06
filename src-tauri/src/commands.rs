@@ -597,6 +597,50 @@ pub async fn wa_send(app: AppHandle, input: WaSendInput) -> R<()> {
     result.map(|_| ())
 }
 
+/// Enregistre un document (PDF) dans « DocumentsDigiStock » pour le joindre manuellement dans WhatsApp.
+/// Dossier fixe : le frontend ne choisit jamais un chemin arbitraire.
+#[tauri::command]
+pub async fn document_export(app: AppHandle, state: State<'_, AppState>, file_name: String, data_base64: String) -> R<String> {
+    state.session()?;
+    let safe: String = file_name.chars().map(|c| if c.is_ascii_alphanumeric() || "-_. ".contains(c) { c } else { '_' }).collect();
+    if safe.is_empty() || !safe.to_lowercase().ends_with(".pdf") || safe.contains("..") {
+        return Err(AppError::validation("Nom de fichier invalide."));
+    }
+    let bytes = base64::engine::general_purpose::STANDARD.decode(data_base64).map_err(|_| AppError::validation("Document invalide."))?;
+    let base = app.path().document_dir().unwrap_or_else(|_| state.data_dir.clone());
+    let dir = base.join("DigiStock");
+    std::fs::create_dir_all(&dir)?;
+    let path = dir.join(safe);
+    std::fs::write(&path, bytes)?;
+    Ok(path.to_string_lossy().to_string())
+}
+
+#[derive(Deserialize)]
+pub struct WaLinkInput {
+    phone: String,
+    message: String,
+    recipient_name: Option<String>,
+    kind: String,
+    entity: Option<String>,
+    entity_id: Option<i64>,
+    attachment: Option<String>,
+}
+
+/// Historique d'un message ouvert dans WhatsApp via le lien officiel (envoyé ensuite par l'utilisateur).
+#[tauri::command]
+pub async fn wa_log_link(state: State<'_, AppState>, input: WaLinkInput) -> R<()> {
+    let s = state.session()?;
+    let conn = state.conn();
+    premium::require(&conn)?;
+    let phone = whatsapp::normalize_phone(&input.phone).ok_or_else(|| AppError::validation("Numéro WhatsApp invalide."))?;
+    conn.execute(
+        "INSERT INTO whatsapp_messages (recipient_name, phone, message, kind, entity, entity_id, attachment, status, user_id, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'opened', ?8, ?9)",
+        rusqlite::params![input.recipient_name, phone, input.message, input.kind, input.entity, input.entity_id, input.attachment, s.user_id, db::now()],
+    )?;
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn wa_logout(app: AppHandle) -> R<()> {
     let state = app.state::<AppState>();

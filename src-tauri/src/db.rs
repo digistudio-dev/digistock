@@ -7,7 +7,10 @@ use std::path::Path;
 
 /// Migrations embarquées. Ne jamais modifier une migration publiée :
 /// ajouter un nouveau fichier `NNNN_nom.sql` et l'enregistrer ici.
-pub const MIGRATIONS: &[(i64, &str, &str)] = &[(1, "init", include_str!("../migrations/0001_init.sql"))];
+pub const MIGRATIONS: &[(i64, &str, &str)] = &[
+    (1, "init", include_str!("../migrations/0001_init.sql")),
+    (2, "whatsapp_link_mode", include_str!("../migrations/0002_whatsapp_link_mode.sql")),
+];
 
 pub fn open(path: &Path) -> AppResult<Connection> {
     let conn = Connection::open(path)?;

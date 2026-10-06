@@ -40,6 +40,7 @@ pub struct WhatsApp {
     status: Arc<Mutex<WaStatus>>,
     pending: Arc<Mutex<HashMap<u64, Sender<Result<Value, String>>>>>,
     next_id: AtomicU64,
+    session_dir: Mutex<Option<PathBuf>>,
 }
 
 fn browser_path() -> Option<PathBuf> {
@@ -58,6 +59,45 @@ fn browser_path() -> Option<PathBuf> {
 fn plain(p: &std::path::Path) -> PathBuf {
     let s = p.to_string_lossy();
     PathBuf::from(s.strip_prefix(r"\\?\").unwrap_or(&s).to_string())
+}
+
+#[cfg(windows)]
+fn hidden(cmd: &mut Command) -> &mut Command {
+    use std::os::windows::process::CommandExt;
+    cmd.creation_flags(0x0800_0000) // CREATE_NO_WINDOW
+}
+
+/// Termine un processus et tous ses descendants (Node.js + navigateur Edge/Chrome lancé par Puppeteer).
+fn kill_tree(pid: u32) {
+    #[cfg(windows)]
+    {
+        let _ = hidden(Command::new("taskkill").args(["/PID", &pid.to_string(), "/T", "/F"]).stdout(Stdio::null()).stderr(Stdio::null())).status();
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = Command::new("kill").args(["-9", &pid.to_string()]).status();
+    }
+}
+
+/// Arrête les navigateurs restés ouverts sur le profil de session WhatsApp (processus orphelins
+/// après une fermeture brutale) et supprime les verrous du profil. Sans cela, Puppeteer refuse
+/// de démarrer : « The browser is already running for … ».
+pub fn kill_stale_browsers(session_dir: &std::path::Path) {
+    let dir = plain(session_dir);
+    #[cfg(windows)]
+    {
+        let needle = dir.to_string_lossy().replace('\'', "''");
+        let script = format!(
+            "Get-CimInstance Win32_Process -Filter \"Name='msedge.exe' OR Name='chrome.exe'\" | Where-Object {{ $_.CommandLine -and $_.CommandLine.ToLower().Contains('{}') }} | ForEach-Object {{ Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }}",
+            needle.to_lowercase()
+        );
+        let _ = hidden(Command::new("powershell").args(["-NoProfile", "-NonInteractive", "-Command", &script]).stdout(Stdio::null()).stderr(Stdio::null())).status();
+    }
+    for profile in [dir.join("session-digistock"), dir.clone()] {
+        for lock in ["lockfile", "SingletonLock", "SingletonCookie", "SingletonSocket"] {
+            let _ = std::fs::remove_file(profile.join(lock));
+        }
+    }
 }
 
 fn node_path() -> PathBuf {
@@ -117,6 +157,8 @@ impl WhatsApp {
         })?;
         let script = script_path(app)?;
         std::fs::create_dir_all(&session_dir)?;
+        kill_stale_browsers(&session_dir);
+        *self.session_dir.lock().unwrap_or_else(|e| e.into_inner()) = Some(session_dir.clone());
         let mut cmd = Command::new(node_path());
         cmd.arg(&script)
             .env("WA_SESSION_DIR", plain(&session_dir))
@@ -125,10 +167,7 @@ impl WhatsApp {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
         #[cfg(windows)]
-        {
-            use std::os::windows::process::CommandExt;
-            cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
-        }
+        hidden(&mut cmd);
         let mut child = cmd.spawn().map_err(|e| AppError::Internal(format!("Impossible de démarrer le service WhatsApp : {e}")))?;
         let stdout = child.stdout.take().ok_or_else(|| AppError::Internal("stdout indisponible".into()))?;
         let stderr = child.stderr.take();
@@ -241,9 +280,21 @@ impl WhatsApp {
             let _ = self.request("shutdown", Value::Null, Duration::from_secs(5));
         }
         if let Some(mut child) = self.child.lock().unwrap_or_else(|e| e.into_inner()).take() {
-            std::thread::sleep(Duration::from_millis(300));
-            let _ = child.kill();
+            // Laisse le service fermer proprement le navigateur, puis termine tout l'arbre de processus.
+            for _ in 0..30 {
+                if !matches!(child.try_wait(), Ok(None)) {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(200));
+            }
+            if matches!(child.try_wait(), Ok(None)) {
+                kill_tree(child.id());
+                let _ = child.kill();
+            }
             let _ = child.wait();
+        }
+        if let Some(dir) = self.session_dir.lock().unwrap_or_else(|e| e.into_inner()).clone() {
+            kill_stale_browsers(&dir);
         }
         *self.stdin.lock().unwrap_or_else(|e| e.into_inner()) = None;
         let mut s = self.status.lock().unwrap_or_else(|e| e.into_inner());

@@ -1,6 +1,6 @@
 [package]
 name = "digistock"
-version = "1.0.0"
+version = "1.0.2"
 description = "DigiStock — gestion de stock et ventes. Par DigiStudio."
 authors = ["DigiStudio"]
 edition = "2021"
@@ -20,6 +20,8 @@ tauri-plugin-log = "2"
 tauri-plugin-opener = "2"
 tauri-plugin-window-state = "2"
 tauri-plugin-single-instance = "2"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rusqlite = { version = "0.32", features = ["bundled", "backup"] }
