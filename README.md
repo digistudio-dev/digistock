@@ -64,7 +64,7 @@ TAURI_SIGNING_PRIVATE_KEY="C:/Users/PROBOOK/.tauri/digistock-updater.key" TAURI_
 npm run release:prepare -- "Correction de la connexion WhatsApp."
 ```
 
-4. Sur GitHub, créez une release nommée exactement `v<version>` (ex. `v1.0.1`) et joignez les 3 fichiers de `release/v<version>/` : l'installateur `.exe`, sa signature `.sig` et `latest.json`.
+4. Sur GitHub, créez une release avec le tag **`DigiStock_<version>`** (ex. `DigiStock_1.0.3`) — c'est l'adresse écrite dans `latest.json` — et joignez les 3 fichiers de `release/v<version>/` : l'installateur `.exe`, sa signature `.sig` et `latest.json`. Autre nom de tag : `npm run release:prepare -- --tag MonTag "notes"`.
 
 > Si la clé privée est perdue, plus aucune mise à jour automatique ne pourra être publiée pour les installations existantes : sauvegardez `digistock-updater.key` en lieu sûr.
 

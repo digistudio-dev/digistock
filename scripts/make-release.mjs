@@ -4,6 +4,8 @@
 //   release/v<version>/latest.json   (lu par la mise à jour automatique)
 //
 // Usage : npm run release:prepare -- "Notes de version"
+//         npm run release:prepare -- --tag v1.0.3 "Notes"   (nom de tag GitHub personnalisé)
+// Par défaut, le tag GitHub attendu est « DigiStock_<version> » (ex. DigiStock_1.0.2).
 // Prérequis : `npm run tauri build` avec TAURI_SIGNING_PRIVATE_KEY défini.
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -27,7 +29,10 @@ mkdirSync(out, { recursive: true });
 copyFileSync(join(nsis, exe), join(out, exe));
 copyFileSync(join(nsis, exe + ".sig"), join(out, exe + ".sig"));
 
-const notes = process.argv.slice(2).join(" ").trim() || `DigiStock ${version}`;
+const args = process.argv.slice(2);
+const tagIndex = args.indexOf("--tag");
+const tag = tagIndex >= 0 ? args.splice(tagIndex, 2)[1] : `DigiStock_${version}`;
+const notes = args.join(" ").trim() || `DigiStock ${version}`;
 const manifest = {
   version,
   notes,
@@ -35,10 +40,10 @@ const manifest = {
   platforms: {
     "windows-x86_64": {
       signature: readFileSync(join(nsis, exe + ".sig"), "utf8").trim(),
-      url: `https://github.com/${repo}/releases/download/v${version}/${exe}`,
+      url: `https://github.com/${repo}/releases/download/${tag}/${exe}`,
     },
   },
 };
 writeFileSync(join(out, "latest.json"), JSON.stringify(manifest, null, 2) + "\n");
 console.log(`Version ${version} prête dans ${out}`);
-console.log(`Publiez la release GitHub « v${version} » avec ces 3 fichiers : ${exe}, ${exe}.sig, latest.json`);
+console.log(`Publiez la release GitHub avec le tag « ${tag} » et ces 3 fichiers : ${exe}, ${exe}.sig, latest.json`);
