@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge, Card } from "@/components/ui/misc";
 import { call, toAppError } from "@/lib/tauri";
 import { useApp } from "@/stores/app";
+import { UpdatePanel } from "@/features/updates/update-panel";
 
 const SHORTCUTS = [
   ["Ctrl + K", "Recherche globale"],
@@ -55,6 +56,7 @@ export function AboutSection() {
           </Button>
         </div>
       </Card>
+      <UpdatePanel />
       <Card className="p-6">
         <div className="mb-4 flex items-center gap-2 font-semibold">
           <Keyboard className="size-4 text-muted-foreground" /> Raccourcis clavier

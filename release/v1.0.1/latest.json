@@ -1,0 +1,11 @@
+{
+  "version": "1.0.1",
+  "notes": "Correction : la connexion WhatsApp ne bloque plus après une fermeture de DigiStock (« The browser is already running »). Nouveau : mises à jour automatiques, menu latéral clair en mode clair, nouveau logo.",
+  "pub_date": "2026-10-06T08:09:06.586Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSK2YxN3lPd1h5cWc1Nzd4M3Z0eFFZT0tNK0wxcC96dDVMcnZvbmIwUFpINEhMTWJVVGpvdHpKenFjaWgyUjg3alRyVE5zeUpRWGZHUFEwVllQcm5sRHFoaFFENnpGaFEwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxMjczODYzCWZpbGU6RGlnaVN0b2NrXzEuMC4xX3g2NC1zZXR1cC5leGUJdmVyc2lvbjoxLjAuMQpxeS9mRlZzNnNEb09Tb09zWXBTSExFVE1mRFVBVFBqcGpTd2pVbzdabGVRTFJzZVVQMmVuSW4zNFRzTHNweHZrUUlidEpVaGpyV3hOWERoaDJlaTlBZz09Cg==",
+      "url": "https://github.com/digistudio-dev/digistock/releases/download/v1.0.1/DigiStock_1.0.1_x64-setup.exe"
+    }
+  }
+}
