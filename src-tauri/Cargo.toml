@@ -1,0 +1,50 @@
+[package]
+name = "digistock"
+version = "1.0.0"
+description = "DigiStock — gestion de stock et ventes. Par DigiStudio."
+authors = ["DigiStudio"]
+edition = "2021"
+rust-version = "1.77"
+
+[lib]
+name = "digistock_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["protocol-asset"] }
+tauri-plugin-dialog = "2"
+tauri-plugin-log = "2"
+tauri-plugin-opener = "2"
+tauri-plugin-window-state = "2"
+tauri-plugin-single-instance = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.32", features = ["bundled", "backup"] }
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+argon2 = "0.5"
+sha2 = "0.10"
+hmac = "0.12"
+hex = "0.4"
+rand = "0.8"
+base64 = "0.22"
+log = "0.4"
+thiserror = "1"
+machine-uid = "0.5"
+uuid = { version = "1", features = ["v4"] }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true
+
+# Le hachage Argon2 est très lent sans optimisation : on l'optimise aussi en développement.
+[profile.dev.package.argon2]
+opt-level = 3
+
+[profile.dev.package.blake2]
+opt-level = 3
