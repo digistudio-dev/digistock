@@ -11,9 +11,11 @@ import { call, toAppError } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/stores/app";
 import type { Session } from "@/types";
+import { PinInput } from "@/components/common/pin-input";
 import { AuthLayout } from "./auth-layout";
+import { emptyQuestions, questionErrors, QuestionsForm, type QA } from "./security-questions";
 
-const STEPS = ["Bienvenue", "Entreprise", "Activité", "Tickets", "Administrateur", "Terminé"];
+const STEPS = ["Bienvenue", "Entreprise", "Activité", "Tickets", "Administrateur", "Sécurité", "Terminé"];
 
 const companySchema = z.object({
   name: z.string().trim().min(2, "Le nom de l'entreprise est obligatoire."),
@@ -91,15 +93,23 @@ export function Onboarding() {
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [seeding, setSeeding] = useState(false);
+  const [pin, setPin] = useState("");
+  const [pinConfirm, setPinConfirm] = useState("");
+  const [questions, setQuestions] = useState<QA[]>(emptyQuestions);
+  const [securityTouched, setSecurityTouched] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const company = useForm<z.infer<typeof companySchema>>({ resolver: zodResolver(companySchema), defaultValues: { currency: "MAD" } });
   const admin = useForm<z.infer<typeof adminSchema>>({ resolver: zodResolver(adminSchema), defaultValues: { name: "", username: "admin", email: "", password: "", confirm: "" } });
 
+  const pinError = pin.length !== 4 ? "Choisissez un code PIN à 4 chiffres." : pin !== pinConfirm ? "Les deux codes PIN ne correspondent pas." : undefined;
+
   const next = async () => {
     if (step === 1 && !(await company.trigger())) return;
-    if (step === 4) {
-      if (!(await admin.trigger())) return;
+    if (step === 4 && !(await admin.trigger())) return;
+    if (step === 5) {
+      setSecurityTouched(true);
+      if (pinError || questionErrors(questions).some(Boolean)) return;
       await finish();
       return;
     }
@@ -116,7 +126,7 @@ export function Onboarding() {
           company: { ...c, default_tax_rate: 20 },
           business_type: business,
           receipt_format: receipt,
-          admin: { name: a.name, username: a.username, email: a.email || null, password: a.password },
+          admin: { name: a.name, username: a.username, email: a.email || null, password: a.password, pin, questions },
         },
       });
       if (logo) {
@@ -127,7 +137,7 @@ export function Onboarding() {
           toast.error("Le logo n'a pas pu être enregistré. Vous pourrez l'ajouter dans les paramètres.");
         }
       }
-      setStep(5);
+      setStep(6);
     } catch (e) {
       toast.error(toAppError(e).message);
     } finally {
@@ -173,7 +183,7 @@ export function Onboarding() {
       <div className="m-auto w-full max-w-[600px] px-8 py-10">
         {step === 0 && (
           <div className="animate-in fade-in-0 slide-in-from-bottom-1">
-            <p className="eyebrow mb-3">Étape 1 sur 6</p>
+            <p className="eyebrow mb-3">Étape 1 sur 7</p>
             <h1 className="text-[2rem] font-semibold leading-tight">Bienvenue sur DigiStock.</h1>
             <p className="mt-3 text-[1rem] text-muted-foreground">Configurez votre entreprise en quelques instants.</p>
             <div className="mt-8 grid gap-3">
@@ -212,7 +222,7 @@ export function Onboarding() {
 
         {step === 1 && (
           <div className="animate-in fade-in-0">
-            <p className="eyebrow mb-2">Étape 2 sur 6</p>
+            <p className="eyebrow mb-2">Étape 2 sur 7</p>
             <h1 className="text-[1.5rem] font-semibold">Votre entreprise</h1>
             <p className="mt-1 text-[0.875rem] text-muted-foreground">Ces informations apparaîtront sur vos tickets et factures.</p>
             <div className="mt-6 flex items-center gap-4">
@@ -279,7 +289,7 @@ export function Onboarding() {
 
         {step === 2 && (
           <div className="animate-in fade-in-0">
-            <p className="eyebrow mb-2">Étape 3 sur 6</p>
+            <p className="eyebrow mb-2">Étape 3 sur 7</p>
             <h1 className="text-[1.5rem] font-semibold">Votre activité</h1>
             <p className="mt-1 text-[0.875rem] text-muted-foreground">Nous adaptons DigiStock à votre façon de travailler.</p>
             <div className="mt-6 grid grid-cols-2 gap-3">
@@ -300,7 +310,7 @@ export function Onboarding() {
 
         {step === 3 && (
           <div className="animate-in fade-in-0">
-            <p className="eyebrow mb-2">Étape 4 sur 6</p>
+            <p className="eyebrow mb-2">Étape 4 sur 7</p>
             <h1 className="text-[1.5rem] font-semibold">Format des reçus</h1>
             <p className="mt-1 text-[0.875rem] text-muted-foreground">Modifiable à tout moment dans les paramètres.</p>
             <div className="mt-6 grid grid-cols-3 gap-3">
@@ -326,7 +336,7 @@ export function Onboarding() {
 
         {step === 4 && (
           <div className="animate-in fade-in-0">
-            <p className="eyebrow mb-2">Étape 5 sur 6</p>
+            <p className="eyebrow mb-2">Étape 5 sur 7</p>
             <h1 className="text-[1.5rem] font-semibold">Compte administrateur</h1>
             <p className="mt-1 text-[0.875rem] text-muted-foreground">Ce compte protège l'accès à DigiStock. Le mot de passe est chiffré et jamais stocké en clair.</p>
             <div className="mt-6 grid grid-cols-2 gap-x-4 gap-y-3.5">
@@ -343,13 +353,34 @@ export function Onboarding() {
                 <Input type="password" {...admin.register("password")} aria-invalid={!!ae.password} />
               </Field>
               <Field label="Confirmation" required error={ae.confirm?.message}>
-                <Input type="password" {...admin.register("confirm")} aria-invalid={!!ae.confirm} onKeyDown={(e) => e.key === "Enter" && next()} />
+                <Input type="password" {...admin.register("confirm")} aria-invalid={!!ae.confirm} />
               </Field>
             </div>
           </div>
         )}
 
         {step === 5 && (
+          <div className="animate-in fade-in-0">
+            <p className="eyebrow mb-2">Étape 6 sur 7</p>
+            <h1 className="text-[1.5rem] font-semibold">Sécurité du compte</h1>
+            <p className="mt-1 text-[0.875rem] text-muted-foreground">Un code PIN pour vous connecter plus vite, et trois questions pour retrouver l'accès si vous oubliez votre mot de passe.</p>
+            <div className="mt-6 grid gap-4 rounded-lg border bg-surface p-4 sm:grid-cols-2">
+              <div>
+                <div className="mb-2 text-center text-[0.8125rem] font-medium">Code PIN (4 chiffres)</div>
+                <PinInput value={pin} onChange={setPin} autoFocus invalid={securityTouched && pin.length !== 4} />
+              </div>
+              <div>
+                <div className="mb-2 text-center text-[0.8125rem] font-medium">Confirmer le code PIN</div>
+                <PinInput value={pinConfirm} onChange={setPinConfirm} invalid={securityTouched && !!pinError} />
+              </div>
+              {securityTouched && pinError && <p className="text-center text-[0.75rem] font-medium text-danger sm:col-span-2">{pinError}</p>}
+            </div>
+            <div className="mb-2 mt-6 text-[0.875rem] font-semibold">Questions de sécurité</div>
+            <QuestionsForm value={questions} onChange={setQuestions} showErrors={securityTouched} />
+          </div>
+        )}
+
+        {step === 6 && (
           <div className="animate-in fade-in-0 zoom-in-[0.98] text-center">
             <div className="mx-auto mb-6 flex size-16 items-center justify-center rounded-2xl bg-success-soft text-success">
               <PartyPopper className="size-7" />
@@ -362,13 +393,13 @@ export function Onboarding() {
           </div>
         )}
 
-        {step < 5 && (
+        {step < 6 && (
           <div className="mt-10 flex items-center justify-between border-t pt-5">
             <Button variant="ghost" onClick={() => setStep((s) => s - 1)} disabled={step === 0}>
               <ArrowLeft /> Précédent
             </Button>
             <Button onClick={next} loading={submitting}>
-              {step === 0 ? "Commencer" : step === 4 ? "Créer mon espace" : "Continuer"} <ArrowRight />
+              {step === 0 ? "Commencer" : step === 5 ? "Créer mon espace" : "Continuer"} <ArrowRight />
             </Button>
           </div>
         )}

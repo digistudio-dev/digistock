@@ -1,15 +1,17 @@
-import { Building2, DatabaseBackup, FileText, Info, MessageCircle, Package, Palette, Receipt, ShoppingCart, Sparkles, Users, type LucideIcon } from "lucide-react";
+import { Building2, DatabaseBackup, FileText, Info, MessageCircle, Package, Palette, Receipt, ShieldCheck, ShoppingCart, Sparkles, Users, type LucideIcon } from "lucide-react";
 import { Navigate, NavLink, useParams } from "react-router-dom";
 import { Page, PageHeader } from "@/components/common/page";
 import { cn } from "@/lib/utils";
 import { useCan } from "@/stores/app";
 import { AboutSection } from "./about-section";
 import { PremiumSection } from "./premium-section";
+import { SecuritySection } from "./security-section";
 import { AppearanceSection, CompanySection, InvoiceSection, ReceiptSection, SalesSection, StockSection, WhatsAppSection } from "./sections";
 
 const SECTIONS: { id: string; label: string; icon: LucideIcon; admin?: boolean }[] = [
   { id: "company", label: "Entreprise", icon: Building2, admin: true },
   { id: "appearance", label: "Apparence", icon: Palette },
+  { id: "security", label: "Sécurité", icon: ShieldCheck },
   { id: "sales", label: "Ventes", icon: ShoppingCart, admin: true },
   { id: "receipts", label: "Tickets", icon: Receipt, admin: true },
   { id: "invoices", label: "Facturation", icon: FileText, admin: true },
@@ -49,6 +51,7 @@ export function SettingsPage() {
         <div className="min-w-0">
           {section === "company" && <CompanySection />}
           {section === "appearance" && <AppearanceSection />}
+          {section === "security" && <SecuritySection />}
           {section === "sales" && <SalesSection />}
           {section === "receipts" && <ReceiptSection />}
           {section === "invoices" && <InvoiceSection />}
