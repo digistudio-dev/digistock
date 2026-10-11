@@ -74,6 +74,17 @@ export function AppShell() {
       const u = await useUpdater.getState().checkNow();
       if (u) toast.info(`DigiStock ${u.version} est disponible`, { duration: 15_000, action: { label: "Voir", onClick: () => navigate("/settings/about") } });
     }, 4000);
+    // Rappel : sans questions de sécurité, un mot de passe oublié est irrécupérable.
+    call<{ questions: string[] }>("auth_security_status")
+      .then((st) => {
+        if (st.questions.length < 3)
+          toast.warning("Protégez votre compte", {
+            description: "Ajoutez un code PIN et 3 questions de sécurité pour pouvoir récupérer votre mot de passe.",
+            duration: 12_000,
+            action: { label: "Configurer", onClick: () => navigate("/settings/security") },
+          });
+      })
+      .catch(() => undefined);
     // Analyse quotidienne des expirations.
     call("notifications_scan").catch(() => undefined);
     const id = setInterval(() => call("notifications_scan").catch(() => undefined), 6 * 60 * 60 * 1000);
