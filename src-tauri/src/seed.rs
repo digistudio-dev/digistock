@@ -36,7 +36,7 @@ pub fn seed_demo(conn: &mut Connection) -> AppResult<Session> {
             .unwrap_or_default(),
             business_type: "commerce".into(),
             receipt_format: "ticket_80".into(),
-            admin: AdminInput { name: "Administrateur".into(), username: "admin".into(), email: None, password: "admin123".into() },
+            admin: AdminInput { name: "Administrateur".into(), username: "admin".into(), email: None, password: "admin123".into(), pin: None, questions: None },
         },
     )?;
     let mut rng = StdRng::seed_from_u64(2026);

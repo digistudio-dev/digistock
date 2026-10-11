@@ -10,6 +10,7 @@ use std::path::Path;
 pub const MIGRATIONS: &[(i64, &str, &str)] = &[
     (1, "init", include_str!("../migrations/0001_init.sql")),
     (2, "whatsapp_link_mode", include_str!("../migrations/0002_whatsapp_link_mode.sql")),
+    (3, "pin_and_recovery", include_str!("../migrations/0003_pin_and_recovery.sql")),
 ];
 
 pub fn open(path: &Path) -> AppResult<Connection> {
@@ -170,7 +171,7 @@ pub fn query_json(conn: &Connection, sql: &str, args: &[Value]) -> AppResult<Vec
 /// Vérifie qu'une requête est en lecture seule (aucune écriture possible).
 pub fn ensure_readonly(conn: &Connection, sql: &str) -> AppResult<()> {
     let lowered = sql.to_lowercase();
-    for forbidden in ["password_hash", "signature", "machine_hash", "pragma", "attach", "load_extension"] {
+    for forbidden in ["password_hash", "pin_hash", "answer_hash", "signature", "machine_hash", "pragma", "attach", "load_extension"] {
         if lowered.contains(forbidden) {
             return Err(AppError::Forbidden);
         }
@@ -180,6 +181,33 @@ pub fn ensure_readonly(conn: &Connection, sql: &str) -> AppResult<()> {
         return Err(AppError::Forbidden);
     }
     Ok(())
+}
+
+/// Colonnes jamais lisibles depuis le frontend (empreintes de mots de passe, PIN, réponses, licence).
+const SENSITIVE_COLUMNS: &[(&str, &str)] = &[
+    ("users", "password_hash"),
+    ("users", "pin_hash"),
+    ("user_security_questions", "answer_hash"),
+    ("premium_activation", "signature"),
+    ("premium_activation", "machine_hash"),
+];
+
+/// Lecture demandée par le frontend : requête en lecture seule, et les colonnes sensibles sont
+/// neutralisées par l'autoriseur SQLite (elles valent NULL), quelle que soit la forme de la requête
+/// (`SELECT *`, sous-requête, UNION…).
+pub fn query_json_guarded(conn: &Connection, sql: &str, args: &[Value]) -> AppResult<Vec<Map<String, Value>>> {
+    use rusqlite::hooks::{AuthAction, AuthContext, Authorization};
+    conn.authorizer(Some(|ctx: AuthContext<'_>| match ctx.action {
+        AuthAction::Read { table_name, column_name }
+            if SENSITIVE_COLUMNS.iter().any(|(t, c)| t.eq_ignore_ascii_case(table_name) && c.eq_ignore_ascii_case(column_name)) =>
+        {
+            Authorization::Ignore
+        }
+        _ => Authorization::Allow,
+    }));
+    let result = ensure_readonly(conn, sql).and_then(|_| query_json(conn, sql, args));
+    conn.authorizer(None::<fn(AuthContext<'_>) -> Authorization>);
+    result
 }
 
 pub fn opt_str(v: &Option<String>) -> Option<String> {

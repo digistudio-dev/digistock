@@ -55,6 +55,12 @@ pub struct AdminInput {
     pub username: String,
     pub email: Option<String>,
     pub password: String,
+    /// Code PIN à 4 chiffres (facultatif).
+    #[serde(default)]
+    pub pin: Option<String>,
+    /// Trois questions de sécurité pour réinitialiser le mot de passe (facultatif).
+    #[serde(default)]
+    pub questions: Option<Vec<super::security::QuestionInput>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -108,6 +114,13 @@ pub fn setup(conn: &mut Connection, input: &SetupInput) -> AppResult<Session> {
     if !["ticket_58", "ticket_80", "a4"].contains(&input.receipt_format.as_str()) {
         return Err(AppError::validation("Format de ticket invalide."));
     }
+    let pin = input.admin.pin.as_deref().filter(|p| !p.is_empty());
+    if let Some(p) = pin {
+        super::security::validate_pin(p)?;
+    }
+    if let Some(q) = &input.admin.questions {
+        super::security::validate_questions(q)?;
+    }
     let hash = hash_password(&input.admin.password)?;
     let tx = conn.transaction()?;
     let mut company = input.company.clone();
@@ -120,6 +133,12 @@ pub fn setup(conn: &mut Connection, input: &SetupInput) -> AppResult<Session> {
     )?;
     let uid = tx.last_insert_rowid();
     tx.execute("INSERT INTO user_roles (user_id, role_id) VALUES (?, 1)", [uid])?;
+    if pin.is_some() {
+        super::security::store_pin(&tx, uid, pin)?;
+    }
+    if let Some(q) = &input.admin.questions {
+        super::security::store_questions(&tx, uid, q)?;
+    }
     let session = load_session(&tx, uid)?;
     audit::log(&tx, Some(&session), "setup.complete", Some("company"), Some(1), &format!("{} a configuré DigiStock.", session.name), None)?;
     tx.commit()?;
@@ -137,6 +156,11 @@ pub fn login(conn: &Connection, username: &str, password: &str) -> AppResult<Ses
     if !verify_password(password, &hash) {
         return Err(invalid());
     }
+    finish_login(conn, id, active)
+}
+
+/// Fin de connexion commune (mot de passe ou PIN) : compte actif, règle Premium, journal.
+pub fn finish_login(conn: &Connection, id: i64, active: i64) -> AppResult<Session> {
     if active != 1 {
         return Err(AppError::validation("Ce compte est désactivé. Contactez l'administrateur."));
     }
@@ -144,7 +168,7 @@ pub fn login(conn: &Connection, username: &str, password: &str) -> AppResult<Ses
     if !premium::is_active(conn) && session.role_id != Some(1) {
         return Err(AppError::validation("Les comptes multiples nécessitent DigiStock Premium. Connectez-vous avec le compte administrateur."));
     }
-    conn.execute("UPDATE users SET last_login_at = ? WHERE id = ?", params![db::now(), id])?;
+    conn.execute("UPDATE users SET last_login_at = ?, pin_failed = 0 WHERE id = ?", params![db::now(), id])?;
     audit::log(conn, Some(&session), "auth.login", Some("user"), Some(id), &format!("{} s'est connecté.", session.name), None)?;
     Ok(session)
 }
@@ -277,7 +301,7 @@ mod tests {
             company: json!({ "name": "Demo Store", "city": "Casablanca" }).as_object().unwrap().clone(),
             business_type: "commerce".into(),
             receipt_format: "ticket_80".into(),
-            admin: AdminInput { name: "Omar".into(), username: "omar".into(), email: None, password: "secret123".into() },
+            admin: AdminInput { name: "Omar".into(), username: "omar".into(), email: None, password: "secret123".into(), pin: None, questions: None },
         }
     }
 

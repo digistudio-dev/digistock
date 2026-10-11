@@ -3,7 +3,7 @@
 
 use crate::backup::{self, BackupInfo};
 use crate::db;
-use crate::domain::{auth, customers, entities, products, purchases, sales, stock};
+use crate::domain::{auth, customers, entities, products, purchases, sales, security, stock};
 use crate::error::{AppError, AppResult};
 use crate::premium::{self, PremiumStatus};
 use crate::state::{load_session, AppState, Session};
@@ -105,11 +105,77 @@ pub async fn auth_logout(state: State<'_, AppState>) -> R<()> {
 #[tauri::command]
 pub async fn auth_unlock(state: State<'_, AppState>, password: String) -> R<bool> {
     let s = state.session()?;
-    let ok = auth::check_password(&state.conn(), s.user_id, &password)?;
-    if !ok {
+    let conn = state.conn();
+    let ok = auth::check_password(&conn, s.user_id, &password)?;
+    if ok {
+        conn.execute("UPDATE users SET pin_failed = 0 WHERE id = ?", [s.user_id])?;
+    } else {
         std::thread::sleep(Duration::from_millis(350));
     }
     Ok(ok)
+}
+
+// ------------------------------------------------------------------ Code PIN et questions de sécurité
+
+#[tauri::command]
+pub async fn auth_login_pin(state: State<'_, AppState>, username: String, pin: String) -> R<Session> {
+    let res = security::login_with_pin(&state.conn(), &username, &pin);
+    match res {
+        Ok(s) => {
+            state.set_session(Some(s.clone()));
+            Ok(s)
+        }
+        Err(e) => {
+            std::thread::sleep(Duration::from_millis(400));
+            Err(e)
+        }
+    }
+}
+
+/// Déverrouillage par PIN de la session en cours.
+#[tauri::command]
+pub async fn auth_unlock_pin(state: State<'_, AppState>, pin: String) -> R<()> {
+    let s = state.session()?;
+    let res = security::verify_pin(&state.conn(), s.user_id, &pin);
+    if res.is_err() {
+        std::thread::sleep(Duration::from_millis(400));
+    }
+    res
+}
+
+#[tauri::command]
+pub async fn auth_security_status(state: State<'_, AppState>) -> R<security::SecurityStatus> {
+    let s = state.session()?;
+    security::status(&state.conn(), s.user_id)
+}
+
+#[tauri::command]
+pub async fn auth_set_pin(state: State<'_, AppState>, current_password: String, pin: Option<String>) -> R<()> {
+    let s = state.session()?;
+    security::set_pin(&state.conn(), &s, &current_password, pin.as_deref().filter(|p| !p.is_empty()))
+}
+
+#[tauri::command]
+pub async fn auth_set_questions(state: State<'_, AppState>, current_password: String, questions: Vec<security::QuestionInput>) -> R<()> {
+    let s = state.session()?;
+    security::set_questions(&mut state.conn(), &s, &current_password, &questions)
+}
+
+/// Mot de passe oublié — étape 1 : questions de l'identifiant (aucune session requise).
+#[tauri::command]
+pub async fn auth_recovery_questions(state: State<'_, AppState>, username: String) -> R<Vec<String>> {
+    std::thread::sleep(Duration::from_millis(300));
+    security::recovery_questions(&state.conn(), &username)
+}
+
+/// Mot de passe oublié — étape 2 : vérification des 3 réponses et nouveau mot de passe.
+#[tauri::command]
+pub async fn auth_recovery_reset(state: State<'_, AppState>, username: String, answers: Vec<String>, new_password: String) -> R<()> {
+    let res = security::recovery_reset(&mut state.conn(), &username, &answers, &new_password);
+    if res.is_err() {
+        std::thread::sleep(Duration::from_millis(600));
+    }
+    res
 }
 
 #[tauri::command]
@@ -136,8 +202,7 @@ pub async fn roles_save(state: State<'_, AppState>, input: auth::RoleInput) -> R
 pub async fn db_select(state: State<'_, AppState>, sql: String, params: Option<Vec<Value>>) -> R<Vec<Map<String, Value>>> {
     state.session()?;
     let conn = state.conn();
-    db::ensure_readonly(&conn, &sql)?;
-    db::query_json(&conn, &sql, &params.unwrap_or_default())
+    db::query_json_guarded(&conn, &sql, &params.unwrap_or_default())
 }
 
 #[tauri::command]
