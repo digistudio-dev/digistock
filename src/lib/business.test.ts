@@ -194,3 +194,17 @@ describe("import CSV produits", () => {
     expect(csv).toContain("1,5");
   });
 });
+
+describe("questions de sécurité", () => {
+  it("exige trois questions distinctes avec réponse", async () => {
+    const { questionErrors, emptyQuestions } = await import("@/features/auth/security-questions");
+    const q = emptyQuestions();
+    expect(questionErrors(q).every(Boolean)).toBe(true); // réponses vides
+    q.forEach((x, i) => (x.answer = "réponse " + i));
+    expect(questionErrors(q).some(Boolean)).toBe(false);
+    q[1].question = q[0].question.toUpperCase();
+    expect(questionErrors(q)[0]).toContain("différentes");
+    q[1].question = "abc";
+    expect(questionErrors(q)[1]).toContain("courte");
+  });
+});

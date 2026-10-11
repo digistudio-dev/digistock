@@ -6,4 +6,5 @@ pub mod entities;
 pub mod products;
 pub mod purchases;
 pub mod sales;
+pub mod security;
 pub mod stock;
