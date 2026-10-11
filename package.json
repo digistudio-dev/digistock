@@ -1,7 +1,7 @@
 {
   "name": "digistock",
   "private": true,
-  "version": "1.0.2",
+  "version": "1.1.0",
   "description": "DigiStock — gestion de stock, ventes, achats et clients. Par DigiStudio.",
   "author": "DigiStudio",
   "type": "module",
