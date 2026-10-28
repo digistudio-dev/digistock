@@ -18,6 +18,7 @@ import { useShortcuts } from "@/hooks/use-shortcuts";
 import { one } from "@/lib/db";
 import { call, isTauri } from "@/lib/tauri";
 import { useApp, useCan } from "@/stores/app";
+import type { PremiumStatus, Session } from "@/types";
 import { dispatchScan } from "@/stores/scan";
 import { CommandPalette, usePalette } from "./command-palette";
 import { Sidebar } from "./sidebar";
@@ -55,6 +56,26 @@ export function AppShell() {
     if (p) navigate(`/products/${p.id}`);
     else setNotFound(code);
   }, !locked);
+
+  // Revalidation silencieuse de la licence quand une connexion est disponible (jamais bloquante, jamais bruyante).
+  const needsValidation = useApp((s) => s.premium.needs_validation && s.premium.kind !== "legacy" && s.premium.state !== "unlicensed");
+  useEffect(() => {
+    if (!isTauri() || !needsValidation) return;
+    const t = setTimeout(async () => {
+      try {
+        const r = await call<{ premium: PremiumStatus; session: Session }>("premium_validate");
+        useApp.getState().setPremium(r.premium);
+        useApp.getState().setSession(r.session);
+      } catch {
+        try {
+          useApp.getState().setPremium(await call<PremiumStatus>("premium_status"));
+        } catch {
+          /* hors ligne : on garde l'état vérifié localement */
+        }
+      }
+    }, 4000);
+    return () => clearTimeout(t);
+  }, [needsValidation]);
 
   // Événements du backend
   useEffect(() => {

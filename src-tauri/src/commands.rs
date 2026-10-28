@@ -5,6 +5,7 @@ use crate::backup::{self, BackupInfo};
 use crate::db;
 use crate::domain::{auth, customers, entities, products, purchases, sales, security, stock};
 use crate::error::{AppError, AppResult};
+use crate::license;
 use crate::premium::{self, PremiumStatus};
 use crate::state::{load_session, AppState, Session};
 use crate::whatsapp::{self, WaStatus, WhatsApp};
@@ -383,28 +384,111 @@ pub struct PremiumChange {
     session: Session,
 }
 
-#[tauri::command]
-pub async fn premium_activate(state: State<'_, AppState>, code: String) -> R<PremiumChange> {
-    let s = state.require("manage_settings")?;
+/// Réseau hors du verrou de base de données : on lit l'identité, on libère le verrou, puis on appelle le serveur.
+fn license_identity(state: &AppState) -> AppResult<(String, String)> {
     let conn = state.conn();
-    let status = premium::activate(&conn, &code)?;
-    audit::log(&conn, Some(&s), "premium.activate", Some("premium"), None, &format!("{} a activé DigiStock Premium.", s.name), None)?;
-    notify::push(&conn, "premium", "success", "Premium activé", "Toutes les fonctionnalités DigiStock Premium sont disponibles.", None, None)?;
-    let session = load_session(&conn, s.user_id)?;
-    state.set_session(Some(session.clone()));
-    Ok(PremiumChange { premium: status, session })
+    Ok((license::load(&conn)?.installation, license::device_hash()))
+}
+
+fn net_error(e: license::NetError) -> AppError {
+    AppError::validation(license::describe(&e))
 }
 
 #[tauri::command]
-pub async fn premium_deactivate(state: State<'_, AppState>, wa: State<'_, WhatsApp>) -> R<PremiumChange> {
+pub async fn premium_activate(app: AppHandle, state: State<'_, AppState>, code: String) -> R<PremiumChange> {
+    let s = state.require("manage_settings")?;
+    if code.chars().filter(|c| c.is_ascii_alphanumeric()).count() < 12 {
+        return Err(AppError::validation("Clé invalide. Vérifiez la clé saisie."));
+    }
+    let (installation, device) = license_identity(&state)?;
+    let version = app.package_info().version.to_string();
+    let granted = tauri::async_runtime::spawn_blocking(move || license::http_activate(&code, &installation, &device, &version))
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?
+        .map_err(net_error)?;
+    let conn = state.conn();
+    let claims = license::accept_certificate(&conn, &granted.certificate, granted.server_time)?;
+    audit::log(&conn, Some(&s), "premium.activate", Some("premium"), None, &format!("{} a activé DigiStock Premium (licence {}).", s.name, claims.reference), None)?;
+    notify::push(&conn, "premium", "success", "Premium activé", "Toutes les fonctionnalités DigiStock Premium sont disponibles.", None, None)?;
+    let session = load_session(&conn, s.user_id)?;
+    state.set_session(Some(session.clone()));
+    Ok(PremiumChange { premium: premium::status(&conn), session })
+}
+
+#[tauri::command]
+pub async fn premium_status(state: State<'_, AppState>) -> R<PremiumStatus> {
+    Ok(premium::status(&state.conn()))
+}
+
+/// Revalidation en ligne. Un échec réseau n'a aucune conséquence ; un refus explicite du serveur suspend Premium sur cet appareil.
+#[tauri::command]
+pub async fn premium_validate(app: AppHandle, state: State<'_, AppState>) -> R<PremiumChange> {
+    let (installation, certificate) = {
+        let conn = state.conn();
+        let st = license::load(&conn)?;
+        (st.installation, st.certificate)
+    };
+    let Some(certificate) = certificate else {
+        return Err(AppError::validation("Aucune licence à vérifier sur cet appareil."));
+    };
+    let version = app.package_info().version.to_string();
+    let outcome = tauri::async_runtime::spawn_blocking(move || license::http_validate(&certificate, &installation, &version))
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let conn = state.conn();
+    let result = match outcome {
+        Ok(g) => {
+            license::accept_certificate(&conn, &g.certificate, g.server_time)?;
+            Ok(())
+        }
+        Err(license::NetError::Refused(code)) if code != "rate_limited" && code != "invalid_request" => {
+            license::record_denied(&conn, &code)?;
+            Err(AppError::validation(license::describe(&license::NetError::Refused(code))))
+        }
+        Err(e) => Err(net_error(e)),
+    };
+    let session = state.session().ok();
+    if let Some(s) = &session {
+        let fresh = load_session(&conn, s.user_id)?;
+        state.set_session(Some(fresh));
+    }
+    match (result, session) {
+        (Err(e), _) => Err(e),
+        (Ok(()), Some(s)) => Ok(PremiumChange { premium: premium::status(&conn), session: load_session(&conn, s.user_id)? }),
+        (Ok(()), None) => Err(AppError::Unauthenticated),
+    }
+}
+
+#[tauri::command]
+pub async fn premium_deactivate(app: AppHandle, state: State<'_, AppState>, wa: State<'_, WhatsApp>, force: Option<bool>) -> R<PremiumChange> {
     let s = state.require("manage_settings")?;
     if s.role_id != Some(1) {
         return Err(AppError::Forbidden);
     }
+    let (installation, certificate) = {
+        let conn = state.conn();
+        let st = license::load(&conn)?;
+        (st.installation, st.certificate)
+    };
+    // Libère d'abord l'emplacement côté serveur (nécessite Internet), sauf demande explicite de désactivation locale.
+    if let Some(certificate) = certificate {
+        let version = app.package_info().version.to_string();
+        let r = tauri::async_runtime::spawn_blocking(move || license::http_deactivate(&certificate, &installation, &version))
+            .await
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+        if let Err(e) = r {
+            if force != Some(true) {
+                return Err(match e {
+                    license::NetError::Offline => AppError::validation("Connexion Internet requise pour libérer l'appareil. Reconnectez-vous, ou désactivez uniquement sur ce poste (l'emplacement restera occupé jusqu'à une réinitialisation par DigiStudio)."),
+                    other => net_error(other),
+                });
+            }
+        }
+    }
     wa.stop();
     let conn = state.conn();
-    premium::deactivate(&conn)?;
-    audit::log(&conn, Some(&s), "premium.deactivate", Some("premium"), None, &format!("{} a désactivé DigiStock Premium.", s.name), None)?;
+    premium::deactivate_local(&conn)?;
+    audit::log(&conn, Some(&s), "premium.deactivate", Some("premium"), None, &format!("{} a désactivé DigiStock Premium sur cet appareil.", s.name), None)?;
     let session = load_session(&conn, s.user_id)?;
     state.set_session(Some(session.clone()));
     Ok(PremiumChange { premium: premium::status(&conn), session })

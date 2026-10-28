@@ -30,7 +30,7 @@ export const useApp = create<AppState>((set, get) => ({
   ready: false,
   bootstrap: null,
   session: null,
-  premium: { active: false, activated_at: null },
+  premium: { active: false, activated_at: null, state: "unlicensed", kind: null, reference: null, plan: null, expires_at: null, last_validated_at: null, needs_validation: false, denied_code: null, features: [], installation_short: "", device_label: "" },
   company: null,
   settings: { ...DEFAULT_SETTINGS } as Settings,
   locked: false,

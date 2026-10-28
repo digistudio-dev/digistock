@@ -11,6 +11,7 @@ pub const MIGRATIONS: &[(i64, &str, &str)] = &[
     (1, "init", include_str!("../migrations/0001_init.sql")),
     (2, "whatsapp_link_mode", include_str!("../migrations/0002_whatsapp_link_mode.sql")),
     (3, "pin_and_recovery", include_str!("../migrations/0003_pin_and_recovery.sql")),
+    (4, "signed_licenses", include_str!("../migrations/0004_signed_licenses.sql")),
 ];
 
 pub fn open(path: &Path) -> AppResult<Connection> {
@@ -190,6 +191,9 @@ const SENSITIVE_COLUMNS: &[(&str, &str)] = &[
     ("user_security_questions", "answer_hash"),
     ("premium_activation", "signature"),
     ("premium_activation", "machine_hash"),
+    ("license_state", "certificate"),
+    ("license_state", "state_mac"),
+    ("license_state", "installation_id"),
 ];
 
 /// Lecture demandée par le frontend : requête en lecture seule, et les colonnes sensibles sont

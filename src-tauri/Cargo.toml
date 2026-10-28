@@ -1,6 +1,6 @@
 [package]
 name = "digistock"
-version = "1.1.0"
+version = "1.2.0"
 description = "DigiStock — gestion de stock et ventes. Par DigiStudio."
 authors = ["DigiStudio"]
 edition = "2021"
@@ -36,6 +36,11 @@ log = "0.4"
 thiserror = "1"
 machine-uid = "0.5"
 uuid = { version = "1", features = ["v4"] }
+ed25519-dalek = "2"
+ureq = { version = "2", default-features = false, features = ["json", "tls"] }
+
+[dev-dependencies]
+ed25519-dalek = { version = "2", features = ["rand_core"] }
 
 [profile.release]
 codegen-units = 1

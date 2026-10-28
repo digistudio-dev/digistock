@@ -8,7 +8,7 @@ mod domain;
 mod error;
 mod notify;
 mod premium;
-mod premium_codes;
+mod license;
 #[cfg(debug_assertions)]
 mod seed;
 mod state;
@@ -114,6 +114,8 @@ pub fn run() {
             commands::supplier_payment,
             commands::customer_payment,
             commands::premium_activate,
+            commands::premium_status,
+            commands::premium_validate,
             commands::premium_deactivate,
             commands::backup_create,
             commands::backup_list,

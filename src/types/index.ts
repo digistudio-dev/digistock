@@ -7,9 +7,22 @@ export interface Session {
   permissions: string[];
 }
 
+export type LicenseStateName = "licensed" | "legacy" | "expired" | "clock_rollback" | "offline_expired" | "denied" | "invalid" | "unlicensed";
+
 export interface PremiumStatus {
   active: boolean;
   activated_at: string | null;
+  state: LicenseStateName;
+  kind: "lifetime" | "annual" | "legacy" | null;
+  reference: string | null;
+  plan: string | null;
+  expires_at: string | null;
+  last_validated_at: string | null;
+  needs_validation: boolean;
+  denied_code: string | null;
+  features: string[];
+  installation_short: string;
+  device_label: string;
 }
 
 export interface Company {
